@@ -1,57 +1,48 @@
-import React from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
+import { InteractionContext } from './interactionProvider';
 
 /**
  * Composes a component to receive properties indicating if it is active or inactive via
  * props.active and props.inactive.
  *
  * Example:
- * ```
- * function Button ({active, inactive, ...props}) {
- *   // can detect if its become inactive, or is currently active.
- * }
- *
+ * function Button ({active, inactive, ...props}) { ... }
  * const ButtonWithInteractionAwareness = withInteractionProps(Button, {duration: 5000});
  *
  * @param {Component} WrappedComponent A React component to receive interaction properties.
  * @param {Object} {duration} The interaction options.
  * @returns {Component} A wrapped React component.
  */
-function withInteractionProps(WrappedComponent, {duration}) {
-  class InteractionPropertyWrapper extends React.Component {
-    static contextTypes = {
-      interactionProvider: React.PropTypes.object.isRequired
-    };
+function withInteractionProps(WrappedComponent, { duration }) {
+  return function InteractionPropertyWrapper(props) {
+    const interactionContext = useContext(InteractionContext);
+    const [active, setActive] = useState(true);
+    const [inactive, setInactive] = useState(false);
+    const subscriptionRef = useRef(null);
 
-    state = {
-      active: true,
-      inactive: false
-    };
+    useEffect(() => {
+      if (interactionContext) {
+        subscriptionRef.current = interactionContext.subscribe(
+          duration,
+          () => {
+            setActive(true);
+            setInactive(false);
+          },
+          () => {
+            setActive(false);
+            setInactive(true);
+          }
+        );
+      }
+      return () => {
+        if (subscriptionRef.current) {
+          subscriptionRef.current.remove();
+        }
+      };
+    }, [duration, interactionContext]);
 
-    componentDidMount() {
-      this.subscription = this.context.interactionProvider.subscription(
-        duration,
-        () => this.setState({active: true, inactive: false}),
-        () => this.setState({active: false, inactive: true})
-      );
-    }
-
-    componentWillUnmount() {
-      this.subscription.remove();
-    }
-
-    render() {
-      const {
-        children,
-        ...props
-      } = this.props;
-
-      const child = React.Children.only(children);
-
-      return React.cloneElement(child, {
-        ...props,
-        active: this.state.active,
-        inactive: this.state.inactive
-      });
-    }
-  }
+    return <WrappedComponent {...props} active={active} inactive={inactive} />;
+  };
 }
+
+export default withInteractionProps;
